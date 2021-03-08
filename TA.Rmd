@@ -1,0 +1,109 @@
+---
+title: "Stock Market TA Visualisations"
+author: "Priyesh Mehta"
+date: "3/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(quantmod)
+library(TTR)
+library(scales)
+library(glue)
+library(ggthemes)
+library(tidyverse)
+
+companies = readxl::read_excel("C:/Users/mehta/Desktop/College Files/DJIA.xlsx")
+
+```
+
+```{r, echo=FALSE, fig.width=12, warning=FALSE, message=FALSE, fig.height=8, comment="", prompt=TRUE, dpi=300}
+
+for (i in 1:nrow(companies)) {
+  
+  tick = companies[i,1] %>%  pull()
+  company = companies[i,2] %>%  pull()
+  
+  z = (glue("{i}. {company}"))
+  cat(z)
+  
+  getSymbols(tick, auto.assign = T,
+             from = "2010/01/01",
+             to = "2019/12/31",
+             periodicity = "daily")
+  
+  data = eval(parse(text = tick))[,6]
+  colnames(data) = "Adjusted"
+  return = ROC(data, n = 180)
+  if (nrow(data)>400) {
+    ema_50_200 = EMA(data,50) - EMA(data,200)
+  } else {
+    ema_50_200 = rep(0,nrow(data))
+  }
+  
+  bb = BBands(data, n = 30, sd = 1.96)
+  data = cbind(data,ema_50_200,bb)
+  
+  
+  ggplot(fortify(return)) +
+    geom_line(aes(x = Index, y = Adjusted), col = "gold", lwd = 1) +
+    theme_fivethirtyeight() +
+    labs(x = "\nTime", y = "Percentage\n", title = "Price Rate Of Change\n\n",
+         caption = "\n Rate of Change calculated using Price before 6 months") +
+    scale_x_date(date_breaks = "6 months", labels = date_format("%b\n%Y")) +
+    scale_y_continuous(labels = percent_format()) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  geom_hline(yintercept = 0, col = "red", lwd = 1) +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "plain")) +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+        plot.caption = element_text(size = 12, face = "bold.italic"),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text()) -> q
+  
+  
+  ggplot(fortify(data)) +
+    geom_ribbon(mapping = aes(ymin = dn, ymax = up, x = Index), fill = "#ffc7b6") +
+    geom_line(aes(x = Index, y = Adjusted), col = "#dd3400", lwd = 0.5) +
+    theme_fivethirtyeight() +
+    scale_y_continuous(labels = dollar_format()) +
+    scale_x_date(date_breaks = "6 months", labels = date_format("%b\n%Y")) +
+    labs(x = "\nTime", y = "Adjusted Closing Price\n", 
+         title = glue("Price Movement of {company} & \nBollinger Bands\n\n"),
+         caption = "\nBollinger Bands calculated using 30 Day Moving average \nand 1.96 standard deviation.") +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+          plot.caption = element_text(size = 10, face = "bold"),
+          axis.text = element_text(face = "italic"),
+          axis.title = element_text()) -> p
+  
+  if (nrow(data)>400){
+    
+  ggplot(fortify(data)) +
+    geom_area(mapping = aes(Index,EMA), fill = "skyblue") +
+    geom_hline(yintercept = 0, col = "red", lwd = 1) +
+    theme_fivethirtyeight() +
+    scale_y_continuous(labels = dollar_format()) +
+    scale_x_date(date_breaks = "6 months", labels = date_format("%b\n%Y")) +
+    theme(plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+          plot.caption = element_text(size = 12, face = "bold.italic"),
+          axis.text = element_text(face = "italic"),
+          axis.title = element_text()) +
+    labs(title = "Differrence b/w 50 & 200 day \nExponential Moving Averages\n\n", y = "Difference\n", x = "\nTime",
+         caption = glue('{company}')) +
+  expand_limits(x = as.Date("2010-01-01")) -> r
+  } else {
+    r <- NULL
+  }
+
+  print(p)
+  ggpubr::ggarrange(q,r,ncol=1, heights = c(0.5,0.5)) -> a
+  print(a)
+  
+}
+
+```
+
